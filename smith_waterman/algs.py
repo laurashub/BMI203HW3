@@ -177,10 +177,10 @@ def get_scoring_matrix(filename):
 			scores[a1][a2] = int(lines[i].split()[j])
 	return scores
 
-def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 8, gap_extend = 2):
+def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
 	return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True)
 
-def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 8, gap_extend = 2):
+def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
     return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
 
 def apply(actuals, scores, **fxns):
