@@ -21,8 +21,8 @@ def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 	scores = []
 	#calculate true and false scores with specified open/extend
 	for pair in pairs:
-		score = (algs.score(*(pair), score_matrix = matrix, 
-			gap_start = gap_start, gap_extend = gap_extend))
+		score = algs.score(*(pair), score_matrix = matrix, 
+			gap_start = gap_start, gap_extend = gap_extend)
 		scores.append((pair, score))
 	return scores
 
@@ -31,6 +31,7 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 
 	for gap_start in range(1,21):
 		for gap_extend in range(1,6):
+			print(gap_start, gap_extend)
 			true_scores = []
 
 			#calculate true and false scores with specified open/extend
@@ -39,7 +40,7 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 			
 			#get cutoff st true positive rate is 0.7
 			true_scores = sorted([x[1] for x in true_scores])
-			cutoff = true_scores[int(len(true_scores)*0.7)]
+			cutoff = true_scores[int(len(true_scores)*0.3)]
 
 			false_scores =  calc_all_scores(neg, matrix, 
 					gap_start = gap_start, gap_extend = gap_extend)
@@ -59,9 +60,64 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 
 	print(fp_rates)
 
-pos = read_pairs("Pospairs.txt")
+def compare_matrices(pos, neg):
+	TSs = []
+	FSs = []
+	matrices = ["BLOSUM50", "BLOSUM62", "MATIO", "PAM100", "PAM250"]
+	for matrix in matrices:
+		pos_scores = calc_all_scores(pos, matrix, 8, 2)
+		TSs.append([x[1] for x in pos_scores])
+		neg_scores = calc_all_scores(neg, matrix, 8, 2)
+		FSs.append([x[1] for x in neg_scores])
+	algs.roc(TSs, FSs, matrices)
 
-#neg = read_pairs("Negpairs.txt")
+def compare_normalized(pos, neg, matrix):
+	TSs = []
+	FSs = []
+	pos_scores = calc_all_scores(pos, matrix, 8, 2)
+	TSs.append([x[1] for x in pos_scores])
+	TSs.append([score/min(len(pair[0]), len(pair[1])) for pair,score in pos_scores])
+	
+	neg_scores = calc_all_scores(neg, matrix, 8, 2)
+	FSs.append([x[1] for x in neg_scores])
+	FSs.append([score/min(len(pair[0]), len(pair[1])) for pair,score in neg_scores])
+
+	algs.roc(TSs, FSs, ["Raw", "Normalized"])
+
+
+
+
+pos = read_pairs("Pospairs.txt")
+neg = read_pairs("Negpairs.txt")
+
+compare_normalized(pos, neg, "BLOSUM50")
+
+"""
+pos_scores = calc_all_scores(pos, "BLOSUM50", 8, 2)
+neg_scores = calc_all_scores(neg, "BLOSUM50", 8, 2)
+
+with open('test_pos_scores.txt', 'w') as f:
+	for pair, score in pos_scores:
+		f.write("{0} {1} : {2}\n".format(pair[0], pair[1], score))
+with open('test_neg_scores.txt', 'w') as f:
+	for pair, score in neg_scores:
+		f.write("{0} {1} : {2}\n".format(pair[0], pair[1], score))
+
+true_scores = []
+false_scores = []
+with open('test_pos_scores.txt', 'r') as f:
+	for line in f.read().splitlines():
+		true_scores.append(float(line.split(':')[1]))
+
+with open('test_neg_scores.txt', 'r') as f:
+	for line in f.read().splitlines():
+		false_scores.append(float(line.split(':')[1]))
+print(true_scores, false_scores)
+
+
+algs.roc([true_scores], [false_scores], ["test"])
+
+
 print(pos[0][0])
 print(pos[0][1])
 results = algs.align(*pos[0])
@@ -70,4 +126,7 @@ print(results[1])
 print(results[3])
 print(results[2])
 #print(results)
+
 #best_fp_rate(pos, neg)
+"""
+

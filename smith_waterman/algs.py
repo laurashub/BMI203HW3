@@ -77,7 +77,7 @@ def sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True):
 	if align:
 		results = sw_traceback(seq1, seq2, matrices)
 
-	#just want the score
+	#just want the score, max val across all 3 matrices
 	else:
 		results = max(np.amax(M), np.amax(X), np.amax(Y))
 	#score for the alignment is the best score across all 3 matrices
@@ -183,27 +183,65 @@ def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 8, gap_extend = 2):
 def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 8, gap_extend = 2):
     return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
 
-def roc(true_scores, false_scores, cutoff):
+def apply(actuals, scores, **fxns):
+    # generate thresholds over score domain 
+    low = min(scores)
+    high = max(scores)
+    step = (abs(low) + abs(high)) / 1000
+    thresholds = np.arange(low-step, high+step, step)
+    # calculate confusion matrices for all thresholds
+    confusionMatrices = []
+    for threshold in thresholds:
+        confusionMatrices.append(calc_ConfusionMatrix(actuals, scores, threshold))
+    # apply functions to confusion matrices 
+    results = {fname:list(map(fxn, confusionMatrices)) for fname, fxn in fxns.items()}
+    results["THR"] = thresholds
+    return results
+
+
+def roc(tss, fss, titles, save = False, filename = None):
+	xs, ys = [], []
+	for ts, fs in zip(tss, fss):
+		x, y = single_roc(ts, fs)
+		xs.append(x)
+		ys.append(y)
+
+	for x, y, title in zip(xs, ys, titles):
+		label = "{0}: {1:.2f}".format(title, np.trapz(y[::-1],x[::-1]))
+		plt.plot(x, y, label = label)
+
+	#middle line for comparison
+	plt.plot(np.linspace(0, 1, 100),np.linspace(0, 1, 100), linestyle='--')
+	plt.legend()
+	if save and filename:
+		plt.savefig(filename, dpi=200)
+	else:
+		plt.show()
+
+def single_roc(true_scores, false_scores):
 	x = []
 	y = []
 	total_true = len(true_scores)
 	total_false = len(false_scores)
-	all_TP = 0
-	all_FP = 0
 
-	for i in range(max(len(true_scores), len(false_scores))):
-		if i < len(true_scores):
-			if true_scores[i] > cutoff:
-				all_TP += 1
-		if i < len(false_scores):
-			if false_scores[i] > cutoff: 
-				all_FP += 1
+	#calculate things for 
+	min_score = min(true_scores + false_scores)
+	max_score = max(true_scores + false_scores)
+	step = (max_score - min_score) / 100
 
-		x.append(all_FP/total_true)
-		y.append(all_TP/total_true)
+	#loop through thresholds
+	for threshold in np.arange(min_score-step, max_score+step, step):
+		tp = 0.0
+		fp = 0.0
+		#calculate TP rate for current threshold
+		for ts in true_scores:
+			if ts > threshold:
+				tp += 1
+		y.append(tp/total_true)
 
-	plt.plot(x, y)
-	auc = np.trapz(y,x)
-	plt.show()
-	return auc
-
+		#Calculate FP rate for current threshold
+		for fs in false_scores:
+			if fs > threshold:
+				fp += 1
+		x.append(fp/total_false)
+	return x,y
