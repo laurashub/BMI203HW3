@@ -1,6 +1,5 @@
 import numpy as np
 import sys
-import itertools
 import matplotlib.pyplot as plt
 
 def sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True):
