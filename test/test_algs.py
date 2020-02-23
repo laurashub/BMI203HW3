@@ -10,21 +10,25 @@ def test_read_matrix():
 	assert(blosum50['F']['A'] == -3)
 	assert(blosum50['A']['F'] == -3)
 
-	blosum62 = algs.get_scoring_matrix("BLOSUM50")
+	blosum62 = algs.get_scoring_matrix("BLOSUM62")
 	assert(blosum62['A']['A'] == 4)
 	assert(blosum62['F']['A'] == -2)
 	assert(blosum62['A']['F'] == -2)
 
-	matio = algs.get_scoring_matrix("BLOSUM50")
+	matio = algs.get_scoring_matrix("MATIO")
 	assert(matio['A']['A'] == 0)
 	assert(matio['F']['A'] == 2)
 	assert(matio['A']['F'] == 2)
 
 def test_smithwaterman():
-	#7 * A:A (5)
-	assert (algs.score("AAAAAAA", "AAAAAAA", "BLOSUM50") == 35)
+	score, seq1, seq2, align = algs.align("AAAAAAA", "AAAAAAA", "BLOSUM50")
+	assert(seq1 == seq2 == "AAAAAAA")
 
-
+	score, seq1, seq2, align = algs.align("CAGT", "CAAAGT", "BLOSUM50")
+	assert(seq1 == "CA--GT" or seq1 == "C--AGT") #affine, should have double gap
+	assert(seq2 == "CAAAGT")
 
 def test_scoring():
-    return None
+	#7 * A:A (5)
+    assert (algs.score("AAAAAAA", "AAAAAAA", "BLOSUM50") == 35)
+    assert (algs.score("AAAAAAA", "GGGGGGG", "BLOSUM50") == 0)
