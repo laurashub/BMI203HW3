@@ -5,8 +5,12 @@ import matplotlib.pyplot as plt
 def sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True):
 	np.set_printoptions(threshold=sys.maxsize)
 
-	#import scoring function
-	scoring_matrix = get_scoring_matrix(score_matrix)
+	#pass in either a dict or a str
+	if isinstance(score_matrix, str):
+		#import scoring function
+		scoring_matrix = get_scoring_matrix(score_matrix)
+	else:
+		scoring_matrix = score_matrix
 
 	#append a space to the front, makes the lengths corrent for 
 	#the matrix dimensions and avoids off by 1 errors later

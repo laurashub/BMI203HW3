@@ -3,6 +3,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import copy
+import os
 
 def read_pairs(filename):
 	pairs = []
@@ -20,6 +21,11 @@ def read_fasta(filename):
 
 def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 	scores = []
+
+	#speedup - read in score matrix here if its a string
+	if isinstance(matrix, str):
+		matrix = algs.get_scoring_matrix(matrix)
+
 	#calculate true and false scores with specified open/extend
 	for pair in pairs:
 		score = algs.score(*(pair), score_matrix = matrix, 
@@ -29,6 +35,11 @@ def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 
 def calc_all_aligns(pairs, matrix, gap_start, gap_extend, filename):
 	aligned = []
+
+	#speedup - read in score matrix here if its a string
+	if isinstance(matrix, str):
+		matrix = algs.get_scoring_matrix(matrix)
+
 	#calculate true and false scores with specified open/extend
 	for pair in pairs:
 		results = algs.align(*(pair), score_matrix = matrix, 
@@ -46,11 +57,11 @@ def calc_fp_rate(true_scores, false_scores, cutoff):
 	cutoff = true_scores[int(len(true_scores)*(1-cutoff))]
 
 	fps = 0
-	for pair, score in false_scores:
+	for score in false_scores:
 		if score > cutoff:
 			fps += 1
 
-	return fps/len(neg_scores)
+	return fps/len(false_scores)
 
 
 def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
@@ -172,7 +183,7 @@ def create_matrix_file(matrix, filename):
 			f.write(" ".join([str(matrix[aa1][aa2]) for aa2 in aas]) + '\n')
 
 
-def genetic_loop(pos, neg, population, calculated_scores, generation):
+def genetic_loop(pos, neg, population, calculated_scores, generation, goal):
 	"""
 	Selection
     Crossover
@@ -181,34 +192,30 @@ def genetic_loop(pos, neg, population, calculated_scores, generation):
 	"""
 
 	#score them and select the two most "fit"
-	print(calculated_scores)
 	scores = {}
 	for i, individual in enumerate(population):
-		#check if we already have the score for this matrix
+		#check if we already have the score for this matrix, no need to recalculate
+		#the parents that didn't change
 		if calculated_scores[i] != -1:
 			scores[i] = calculated_scores[i]
 			continue
-		#write matrix to file
-		create_matrix_file(individual, str(generation) + "_" + str(i))
 		
 		#calculate scores
 		true_scores = [x[1] for x in 
-			calc_all_scores(pos, str(generation) + "_" + str(i), 11, 1)]
+			calc_all_scores(pos, individual, 11, 1)]
 		false_scores = [x[1] for x in 
-			calc_all_scores(neg, str(generation) + "_" + str(i), 11, 1)]
+			calc_all_scores(neg, individual, 11, 1)]
 
 		#evaluate current 
 		scores[i] = loss_function(true_scores, false_scores)
 
 		#if this matrix scored better, we're done!
-		if scores[i] > max(calculated_scores):
+		if scores[i] > goal:
 			return [individual], (i, scores[i])
 
-		#TODO: rm the file so we don't create this too much
-	print(scores)
-	#keep top 3
+	print("Gen " + str(generation), scores.values())
+	#keep top 2
 	pop_to_keep = sorted(scores, key = lambda x: scores[x], reverse = True)[:2]
-	print("pop to keep", pop_to_keep)
 	population = [population[i] for i in pop_to_keep] #get matrices
 	new_scores = [scores[i] for i in pop_to_keep] #get corresponding scores
 
@@ -243,20 +250,24 @@ def genetic_loop(pos, neg, population, calculated_scores, generation):
 
 	return population, new_scores
 
-def optimize_score_matrix(pos, neg, starting_matrix):
+def optimize_score_matrix(pos, neg, starting_matrix, goal = None):
 	"""
 	Genetic, starting from https://towardsdatascience.com/introduction-to-genetic-algorithms-
 	including-example-code-e396e98d8bf3
 	"""
+	starting_matrix = algs.get_scoring_matrix(starting_matrix)
 
 	#calculate the starting score 
 	true_scores = [x[1] for x in calc_all_scores(pos, starting_matrix, 11, 1)]
 	false_scores = [x[1] for x in calc_all_scores(neg, starting_matrix, 11, 1)]
 	scores = [loss_function(true_scores, false_scores)]
+
+	#if we dont have a specific goal, beat the starting matrix
+	if goal is None:
+		goal = scores[0]
 	print("Starting score:", scores[0])
 
-	starting_mat = algs.get_scoring_matrix(starting_matrix)
-	population = [starting_mat]
+	population = [starting_matrix]
 
 	#generate 3 random matrices for a total population of 4
 	for i in range(3):
@@ -266,13 +277,13 @@ def optimize_score_matrix(pos, neg, starting_matrix):
 	generation = 0
 	best_matrix = None
 	while best_matrix is None:
-		population, scores = genetic_loop(pos, neg, population, scores, generation)
-		#check if we found the best 
+		population, scores = genetic_loop(pos, neg, population, scores, generation, goal)
+		#check if we found the best
 		if len(population) == 1:
 			i, score = scores
 			print ("Optimized: {0}_{1}, score: {2}".format(generation, i, score))
 			best_matrix = population[0]
-			create_matrix_file(best_matrix, "optimized_matrix_from_" + starting_matrix)
+			create_matrix_file(best_matrix, "optimized_" + starting_matrix)
 		generation += 1
 
 	return best_matrix
@@ -281,5 +292,4 @@ if __name__ == "__main__":
 	pos = read_pairs("Pospairs.txt")
 	neg = read_pairs("Negpairs.txt")
 
-	compare_matrices(pos, neg, gen_roc = False)
-	#compare_matrices(pos, neg, matrices = ["PAM250","optimized_matrix_from_PAM250"], )
+	optimize_score_matrix(pos, neg, "BLOSUM50", 2.5)
