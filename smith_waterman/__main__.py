@@ -19,6 +19,17 @@ def read_fasta(filename):
 			seq += line
 	return seq
 
+def read_alignment_scores(filename):
+	#get all the scores in filename
+	scores = []
+	with open(filename, 'r') as f:
+		for line in f.read().splitlines():
+			try:
+				scores.append(float(line))
+			except:
+				pass
+	return scores
+
 def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 	scores = []
 
@@ -296,19 +307,10 @@ def optimize_score_matrix(pos, neg, starting_matrix, goal = None, max_gen = 100)
 
 	return best_matrix
 
-def read_alignment_scores(filename):
-	#get all the scores in filename
-	scores = []
-	with open(filename, 'r') as f:
-		for line in f.read().splitlines():
-			try:
-				scores.append(float(line))
-			except:
-				pass
-	return scores
-
 
 if __name__ == "__main__":
+	pass
+	"""
 	pos = read_pairs("Pospairs.txt")
 	neg = read_pairs("Negpairs.txt")
 
@@ -331,4 +333,5 @@ if __name__ == "__main__":
 	neg_diff = sum([x[0] - x[1] for x in zip(fp_b50o, fp_b50)]) / len(fp_b50)
 
 	print(total_diff, pos_diff, neg_diff)
+	"""
 	

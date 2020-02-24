@@ -186,21 +186,6 @@ def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1)
 def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
     return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
 
-def apply(actuals, scores, **fxns):
-    # generate thresholds over score domain 
-    low = min(scores)
-    high = max(scores)
-    step = (abs(low) + abs(high)) / 1000
-    thresholds = np.arange(low-step, high+step, step)
-    # calculate confusion matrices for all thresholds
-    confusionMatrices = []
-    for threshold in thresholds:
-        confusionMatrices.append(calc_ConfusionMatrix(actuals, scores, threshold))
-    # apply functions to confusion matrices 
-    results = {fname:list(map(fxn, confusionMatrices)) for fname, fxn in fxns.items()}
-    results["THR"] = thresholds
-    return results
-
 def roc(tss, fss, titles, save = False, show = False, filename = None):
 	xs, ys = [], []
 	for ts, fs in zip(tss, fss):

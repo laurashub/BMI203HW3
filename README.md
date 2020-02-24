@@ -1,27 +1,39 @@
-# example
+# HW3
 
 [![Build
 Status](https://travis-ci.org/laurashub/BMI203HW3.svg?branch=master)](https://travis-ci.org/laurashub/BMI203HW3)
 
-Example python project with testing.
+## functions
+* __main__.py
+  * read__pairs
+  * read_fasta
+  * read_alignment_scores
+  * calc_all_scores
+  * calc_all_aligns
+  * calc_fp_rate
+  * best_fp_rate
+  * compare_matrices
+  * compare_normalized
+  * loss_function
+  * check_symmetry
+  * mutate_matrix
+  * create_matrix_file
+  * genetic_loop
+  * optimize_score_matrix
+* algs.py
+  * sw
+  * sw_traceback
+  * sanitize_seq
+  * get_scoring_matrix
+  * align
+  * score
+  * apply
+  * roc
+  * single_roc
 
-## usage
+## main
 
-To use the package, first make a new conda environment and activate it
-
-```
-conda create -n exampleenv python=3
-source activate exampleenv
-```
-
-then run
-
-```
-conda install --yes --file requirements.txt
-```
-
-to install all the dependencies in `requirements.txt`. Then the package's
-main function (located in `example/__main__.py`) can be run as follows
+Currently does nothing, was used to generate alignments and graphs
 
 ```
 python -m smith_waterman
