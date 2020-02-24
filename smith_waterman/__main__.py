@@ -296,11 +296,39 @@ def optimize_score_matrix(pos, neg, starting_matrix, goal = None, max_gen = 100)
 
 	return best_matrix
 
+def read_alignment_scores(filename):
+	#get all the scores in filename
+	scores = []
+	with open(filename, 'r') as f:
+		for line in f.read().splitlines():
+			try:
+				scores.append(float(line))
+			except:
+				pass
+	return scores
+
+
 if __name__ == "__main__":
 	pos = read_pairs("Pospairs.txt")
 	neg = read_pairs("Negpairs.txt")
 
-	#compare_matrices(pos, neg, ["BLOSUM50", "optimized_BLOSUM50"], filename = "BLOSUM50_optimization.png")
-	calc_all_aligns(pos, "optimized_BLOSUM50", 11, 1, 'optimized_pos_aligns.txt')
-	calc_all_aligns(neg, "optimized_BLOSUM50", 11, 1, 'optimized_neg_aligns.txt')
-	#optimize_score_matrix(pos, neg, "MATIO", 2.5, max_gen = 200)
+	#calc_all_aligns(pos, "MATIO", 11, 1, "MATIO_pos_aligns.txt")
+	#calc_all_aligns(neg, "MATIO", 11, 1, "MATIO_neg_aligns.txt")
+
+	#compare_matrices(pos, neg, matrices = ["MATIO", "optimized_MATIO_gen_200"], filename = "MATIO_optimization.png")
+
+	
+	tp_b50 = read_alignment_scores("MATIO_pos_aligns.txt")
+	fp_b50 = read_alignment_scores("MATIO_neg_aligns.txt")
+	all_b50 = tp_b50 + fp_b50
+
+	tp_b50o = read_alignment_scores("MATIO_optimized_pos_aligns.txt")
+	fp_b50o = read_alignment_scores("MATIO_optimized_neg_aligns.txt")
+	all_b50o = tp_b50o + fp_b50o
+
+	total_diff = sum([x[0] - x[1] for x in zip(all_b50o, all_b50)]) / len(all_b50)
+	pos_diff = sum([x[0] - x[1] for x in zip(tp_b50o, tp_b50)]) / len(tp_b50)
+	neg_diff = sum([x[0] - x[1] for x in zip(fp_b50o, fp_b50)]) / len(fp_b50)
+
+	print(total_diff, pos_diff, neg_diff)
+	

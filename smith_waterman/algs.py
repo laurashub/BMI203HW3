@@ -229,7 +229,7 @@ def single_roc(true_scores, false_scores):
 	total_true = len(true_scores)
 	total_false = len(false_scores)
 
-	#calculate things for 
+	#calculate things for thresholding
 	min_score = min(true_scores + false_scores)
 	max_score = max(true_scores + false_scores)
 	step = (max_score - min_score) / 100
