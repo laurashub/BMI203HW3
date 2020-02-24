@@ -173,7 +173,7 @@ def get_scoring_matrix(filename):
 		for j, a2 in enumerate(aas):
 			if a1 not in scores:
 				scores[a1] = {}
-			scores[a1][a2] = int(lines[i].split()[j])
+			scores[a1][a2] = float(lines[i].split()[j])
 	return scores
 
 def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
@@ -197,8 +197,7 @@ def apply(actuals, scores, **fxns):
     results["THR"] = thresholds
     return results
 
-
-def roc(tss, fss, titles, save = False, filename = None):
+def roc(tss, fss, titles, save = False, show = False, filename = None):
 	xs, ys = [], []
 	for ts, fs in zip(tss, fss):
 		x, y = single_roc(ts, fs)
@@ -214,8 +213,11 @@ def roc(tss, fss, titles, save = False, filename = None):
 	plt.legend()
 	if save and filename:
 		plt.savefig(filename, dpi=200)
-	else:
+	elif show:
 		plt.show()
+	else:
+		return xs, ys
+
 
 def single_roc(true_scores, false_scores):
 	x = []

@@ -2,6 +2,7 @@ from smith_waterman import algs
 import numpy as np
 import seaborn as sns
 import pandas as pd
+import copy
 
 def read_pairs(filename):
 	pairs = []
@@ -27,15 +28,30 @@ def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 	return scores
 
 def calc_all_aligns(pairs, matrix, gap_start, gap_extend, filename):
-	scores = []
+	aligned = []
 	#calculate true and false scores with specified open/extend
 	for pair in pairs:
-		score = algs.score(*(pair), score_matrix = matrix, 
+		results = algs.align(*(pair), score_matrix = matrix, 
 			gap_start = gap_start, gap_extend = gap_extend)
-		scores.append((pair, score))
-	#with open(filename, 'w') as f:
+		aligned.append((results[1], results[2], results[0]))
+	with open(filename, 'w') as f:
+		for seq1, seq2, score in aligned:
+			f.write(seq1 + '\n')
+			f.write(seq2 + '\n')
+			f.write(str(score) + '\n')
+			f.write('\n')
 
-	return scores
+def calc_fp_rate(true_scores, false_scores, cutoff):
+	true_scores = sorted(true_scores)
+	cutoff = true_scores[int(len(true_scores)*(1-cutoff))]
+
+	fps = 0
+	for pair, score in false_scores:
+		if score > cutoff:
+			fps += 1
+
+	return fps/len(neg_scores)
+
 
 def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 	fp_rates = pd.DataFrame(index=range(1,21), columns=range(1,6), dtype=np.double)
@@ -47,20 +63,12 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 			#calculate true and false scores with specified open/extend
 			true_scores = calc_all_scores(pos, matrix, 
 					gap_start = gap_start, gap_extend = gap_extend)
-			
-			#get cutoff st true positive rate is 0.7
-			true_scores = sorted([x[1] for x in true_scores])
-			cutoff = true_scores[int(len(true_scores)*0.3)]
-
 			false_scores =  calc_all_scores(neg, matrix, 
 					gap_start = gap_start, gap_extend = gap_extend)
-
-			fps = 0
-			for pair, score in false_scores:
-				if score > cutoff:
-					fps += 1
-
-			fp_rates[gap_extend][gap_start] = fps/len(neg)
+			
+			fp_rates[gap_extend][gap_start] = calc_fp_rate(
+				[x[1] for x in true_scores], 
+				[y[1] for y in false_scores], 0.7)
 
 	ax = sns.heatmap(fp_rates, annot=True, annot_kws={"size": 7})
 	ax.set(xlabel='Gap extend', ylabel='Gap start')
@@ -70,16 +78,23 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 
 	print(fp_rates)
 
-def compare_matrices(pos, neg):
+def compare_matrices(pos, neg, 
+	matrices = ["BLOSUM50", "BLOSUM62", "MATIO", "PAM100", "PAM250"],
+	gen_roc = True,
+	filename = "all_matrices_roc.png"):
+
 	TSs = []
 	FSs = []
-	matrices = ["BLOSUM50", "BLOSUM62", "MATIO", "PAM100", "PAM250"]
 	for matrix in matrices:
 		pos_scores = calc_all_scores(pos, matrix, 11, 1)
 		TSs.append([x[1] for x in pos_scores])
 		neg_scores = calc_all_scores(neg, matrix, 11, 1)
 		FSs.append([x[1] for x in neg_scores])
-	algs.roc(TSs, FSs, matrices, save = True, filename = 'all_matrices_roc.png')
+	if gen_roc:
+		algs.roc(TSs, FSs, matrices, save = True, filename = filename)
+	else:
+		for ts, fs, matrix in zip(TSs, FSs, matrices):
+			print(matrix, calc_fp_rate(ts, fs, 0.7))
 
 def compare_normalized(pos, neg, matrix):
 	TSs = []
@@ -109,22 +124,162 @@ def loss_function(true_scores, false_scores):
 	true_scores = sorted(true_scores)
 	false_scores = sorted(false_scores)
 
-	score = 0
+	fp_score = 0
 
 	for fp_rate in [0.0, 0.1, 0.2, 0.3]:
 		TPs = 0.0
-		cutoff = false_scores[int(len(false_scores)*(1-fp_rate))]+1
+		cutoff = false_scores[int(len(false_scores)*(1-fp_rate))-1]
 		for score in true_scores:
-			if true_scores > cutoff:
+			if score > cutoff:
 				TPs += 1
-		score += TPs/len(true_scores)
-	return score
+		fp_score += (TPs/len(true_scores))
+	return fp_score
+
+def check_symmetry(matrix):
+	for aa1 in matrix:
+		for aa2 in matrix[aa1]:
+			assert(matrix[aa1][aa2] == matrix[aa2][aa1])
+
+def mutate_matrix(starting_matrix, sigma, mut_prob = 1):
+	new_matrix = {}
+
+	#for each value, random sample around starting value
+	for aa1 in starting_matrix:
+		if aa1 not in new_matrix:
+			new_matrix[aa1] = {}
+		for aa2 in starting_matrix[aa1]:
+			#ensure symmetry, check if this pair exists 
+			if aa2 in new_matrix and aa1 in new_matrix[aa2]:
+				new_matrix[aa1][aa2] = new_matrix[aa2][aa1]
+			#if it doesn't, check what to do next
+			else:
+				#check if we should mutate
+				mut = np.random.uniform(0,1)
+				#if we should, select from normal distribution around starting value 
+				if mut < mut_prob:
+					new_matrix[aa1][aa2] = np.random.normal(starting_matrix[aa1][aa2], sigma)
+				#keep value from start matrix
+				else:
+					new_matrix[aa1][aa2] = starting_matrix[aa1][aa2]
+	check_symmetry(new_matrix)
+	return new_matrix
+
+def create_matrix_file(matrix, filename):
+	aas = list(matrix.keys())
+	with open(filename, 'w') as f:
+		f.write(" ".join(aas) + '\n')
+		for aa1 in aas:
+			f.write(" ".join([str(matrix[aa1][aa2]) for aa2 in aas]) + '\n')
 
 
+def genetic_loop(pos, neg, population, calculated_scores, generation):
+	"""
+	Selection
+    Crossover
+    Mutation
+    Compute fitness
+	"""
 
+	#score them and select the two most "fit"
+	print(calculated_scores)
+	scores = {}
+	for i, individual in enumerate(population):
+		#check if we already have the score for this matrix
+		if calculated_scores[i] != -1:
+			scores[i] = calculated_scores[i]
+			continue
+		#write matrix to file
+		create_matrix_file(individual, str(generation) + "_" + str(i))
+		
+		#calculate scores
+		true_scores = [x[1] for x in 
+			calc_all_scores(pos, str(generation) + "_" + str(i), 11, 1)]
+		false_scores = [x[1] for x in 
+			calc_all_scores(neg, str(generation) + "_" + str(i), 11, 1)]
 
-pos = read_pairs("Pospairs.txt")
-neg = read_pairs("Negpairs.txt")
+		#evaluate current 
+		scores[i] = loss_function(true_scores, false_scores)
 
-compare_normalized(pos, neg, "PAM250")
+		#if this matrix scored better, we're done!
+		if scores[i] > max(calculated_scores):
+			return [individual], (i, scores[i])
 
+		#TODO: rm the file so we don't create this too much
+	print(scores)
+	#keep top 3
+	pop_to_keep = sorted(scores, key = lambda x: scores[x], reverse = True)[:2]
+	print("pop to keep", pop_to_keep)
+	population = [population[i] for i in pop_to_keep] #get matrices
+	new_scores = [scores[i] for i in pop_to_keep] #get corresponding scores
+
+	#take the top 2 as the 'parents' for the next generation
+	p1, p2 = copy.deepcopy(population[0]), copy.deepcopy(population[1])
+
+	#crossover
+	#randomly select n aas
+	aas = list(p1.keys())
+	switch_aas = np.random.choice(aas, np.random.randint(1, 23), replace = False)
+	
+	#switch those
+	for aa1 in aas:
+		for aa2 in p1[aa1]:
+			if aa1 in switch_aas:
+				#switch them, ensure symmetry
+				temp1, temp2 = p1[aa1][aa2], p1[aa2][aa1]
+				p1[aa1][aa2], p1[aa2][aa1] = p2[aa1][aa2], p2[aa2][aa1] 
+				p2[aa1][aa2], p2[aa2][aa1] = temp1, temp2
+
+	#ensure symmetry
+	check_symmetry(p1)
+	check_symmetry(p2)
+
+	#mutation
+	#mutate 10% of the scores slightly
+	o1 = mutate_matrix(p1, 0.2, 0.1)
+	o2 = mutate_matrix(p2, 0.2, 0.1)
+	
+	population += [o1, o2]
+	new_scores += [-1, -1]
+
+	return population, new_scores
+
+def optimize_score_matrix(pos, neg, starting_matrix):
+	"""
+	Genetic, starting from https://towardsdatascience.com/introduction-to-genetic-algorithms-
+	including-example-code-e396e98d8bf3
+	"""
+
+	#calculate the starting score 
+	true_scores = [x[1] for x in calc_all_scores(pos, starting_matrix, 11, 1)]
+	false_scores = [x[1] for x in calc_all_scores(neg, starting_matrix, 11, 1)]
+	scores = [loss_function(true_scores, false_scores)]
+	print("Starting score:", scores[0])
+
+	starting_mat = algs.get_scoring_matrix(starting_matrix)
+	population = [starting_mat]
+
+	#generate 3 random matrices for a total population of 4
+	for i in range(3):
+		population.append(mutate_matrix(population[i], 0.5))
+		scores.append(-1)
+	
+	generation = 0
+	best_matrix = None
+	while best_matrix is None:
+		population, scores = genetic_loop(pos, neg, population, scores, generation)
+		#check if we found the best 
+		if len(population) == 1:
+			i, score = scores
+			print ("Optimized: {0}_{1}, score: {2}".format(generation, i, score))
+			best_matrix = population[0]
+			create_matrix_file(best_matrix, "optimized_matrix_from_" + starting_matrix)
+		generation += 1
+
+	return best_matrix
+
+if __name__ == "__main__":
+	pos = read_pairs("Pospairs.txt")
+	neg = read_pairs("Negpairs.txt")
+
+	compare_matrices(pos, neg, gen_roc = False)
+	#compare_matrices(pos, neg, matrices = ["PAM250","optimized_matrix_from_PAM250"], )
