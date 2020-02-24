@@ -25,4 +25,4 @@ install: "pip install -r requirements.txt"
 
 # run tests
 script:
-    "python -m pytest
+    "python -m pytest -v test/*"
