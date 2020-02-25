@@ -5,6 +5,9 @@ import smith_waterman.__main__ as sw
 
 
 def test_roc():
+	"""
+	Make sure all ORC values are between 0 and 1, inclusive
+	"""
 	pos = sw.read_pairs("Pospairs.txt")
 	neg = sw.read_pairs("Negpairs.txt")
 
@@ -18,6 +21,9 @@ def test_roc():
 	assert all([all([y <= 1 and y >= 0 for y in yvals]) for yvals in ys])
 
 def test_read_matrix():
+	"""
+	Make sure scoring matrices are being read correctly
+	"""
 	blosum50 = algs.get_scoring_matrix("BLOSUM50")
 	assert(blosum50['A']['A'] == 5)
 	assert(blosum50['F']['A'] == -3)
@@ -34,6 +40,9 @@ def test_read_matrix():
 	assert(matio['A']['F'] == 2)
 
 def test_smithwaterman():
+	"""
+	Test basic alignemnt - identical sequences and small known alignment
+	"""
 	score, seq1, seq2, align = sw.algs.align("AAAAAAA", "AAAAAAA", "BLOSUM50")
 	assert(seq1 == seq2 == "AAAAAAA")
 
@@ -42,6 +51,17 @@ def test_smithwaterman():
 	assert(seq2 == "CAAAGT")
 
 def test_scoring():
-	#7 * A:A (5)
+	"""
+	scoring returned from alignment
+	"""
     assert (algs.score("AAAAAAA", "AAAAAAA", "BLOSUM50") == 35)
     assert (algs.score("AAAAAAA", "GGGGGGG", "BLOSUM50") == 0)
+
+def test_score_align():
+	"""
+	Score existing alignment
+	"""
+	blosum50 = algs.get_scoring_matrix("BLOSUM50") 
+	assert(algs.score_existing_align("AAAAAAA", "AAAAAAA", blosum50) == 35)
+	assert(algs.score_existing_align("AA-AAAA", "AAAAAAA", blosum50) == 19)
+	assert(algs.score_existing_align("AA--AAA", "AAAAAAA", blosum50) == 13)

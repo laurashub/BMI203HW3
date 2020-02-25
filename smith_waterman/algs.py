@@ -3,7 +3,6 @@ import sys
 import matplotlib.pyplot as plt
 
 def sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True):
-	np.set_printoptions(threshold=sys.maxsize)
 
 	#pass in either a dict or a str
 	if isinstance(score_matrix, str):
@@ -157,7 +156,7 @@ def sw_traceback(seq1, seq2, matrices):
 	return best_score, seq1_aligned, seq2_aligned, align
 
 def sanitize_seq(seq, allowed):
-	#Get rid of disallowed characters to avoid key errors
+	#Get rid of disallowed characters to avoid key errors, also set to uppercase
 	new_seq = ""
 	for char in seq.upper():
 		if char not in allowed:
@@ -167,7 +166,7 @@ def sanitize_seq(seq, allowed):
 	return new_seq
 
 def get_scoring_matrix(filename):
-	#open file, skip commen lines, build dictionary
+	#open file, skip comment lines, build dictionary of scores
 	scores = {}
 	with open(filename, 'r') as f:
 		lines = [line for line in f.read().splitlines() if line[0] != "#"]
@@ -181,18 +180,58 @@ def get_scoring_matrix(filename):
 	return scores
 
 def align(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
+	"""
+	Do full align, return aligned sequences
+	"""
 	return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = True)
 
 def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1):
+	"""
+	Align but no traceback, just get the alignment score
+	"""
     return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
 
+def score_existing_align(seq1, seq2, matrix, gap_start = 11, gap_extend = 1):
+	"""
+	Scores an existing alignment between seq1 and seq2 by pairwise comparison
+	"""
+
+	#start at 0, no gap
+	score = 0
+	gap = False
+	
+	#go through pairs
+	for char1, char2 in zip(seq1, seq2):
+		#if this is a gp
+		if char1 == "-"or char2 == "-":
+			#is were already in a gap, extend
+			if gap:
+				score -= gap_extend
+			#otherwise, this is a new gap, gap start
+			else:
+				score -= gap_start
+				gap = True
+		#otherside, add score, turn off gap
+		else:
+			score += matrix[char1][char2]
+			if gap:
+				gap = False
+	return score
+
+
 def roc(tss, fss, titles, save = False, show = False, filename = None):
+	"""
+	Calculates ROC curve for multiple matrices
+	"""
 	xs, ys = [], []
+
+	#get x and y values for each true and false scores
 	for ts, fs in zip(tss, fss):
 		x, y = single_roc(ts, fs)
 		xs.append(x)
 		ys.append(y)
 
+	#plot each line
 	for x, y, title in zip(xs, ys, titles):
 		label = "{0}: {1:.2f}".format(title, np.trapz(y[::-1],x[::-1]))
 		plt.plot(x, y, label = label)
@@ -200,6 +239,8 @@ def roc(tss, fss, titles, save = False, show = False, filename = None):
 	#middle line for comparison
 	plt.plot(np.linspace(0, 1, 100),np.linspace(0, 1, 100), linestyle='--')
 	plt.legend()
+
+	#determine save or show
 	if save and filename:
 		plt.savefig(filename, dpi=200)
 	elif show:
@@ -214,15 +255,17 @@ def single_roc(true_scores, false_scores):
 	total_true = len(true_scores)
 	total_false = len(false_scores)
 
-	#calculate things for thresholding
+	#calculate values for threshold, 100 total steps
 	min_score = min(true_scores + false_scores)
 	max_score = max(true_scores + false_scores)
 	step = (max_score - min_score) / 100
 
 	#loop through thresholds
 	for threshold in np.arange(min_score-step, max_score+step, step):
+		#start with true positive and false positive rates of 0
 		tp = 0.0
 		fp = 0.0
+
 		#calculate TP rate for current threshold
 		for ts in true_scores:
 			if ts > threshold:
@@ -234,4 +277,5 @@ def single_roc(true_scores, false_scores):
 			if fs > threshold:
 				fp += 1
 		x.append(fp/total_false)
+	#return all calculated true positive and false positive rates for current scores
 	return x,y

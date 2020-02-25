@@ -6,6 +6,9 @@ import copy
 import os
 
 def read_pairs(filename):
+	"""
+	Read paires from pospairs or negpairs
+	"""
 	pairs = []
 	with open(filename, 'r') as pairs_file:
 		for line in pairs_file.read().splitlines():
@@ -13,6 +16,9 @@ def read_pairs(filename):
 	return pairs
 
 def read_fasta(filename):
+	"""
+	Get sequence from FASTA file
+	"""
 	seq = ""
 	for line in open(filename, 'r').read().splitlines():
 		if line[0] is not '>':
@@ -20,7 +26,9 @@ def read_fasta(filename):
 	return seq
 
 def read_alignment_scores(filename):
-	#get all the scores in filename
+	"""
+	get all the scores in filename, previously calculated scores
+	"""
 	scores = []
 	with open(filename, 'r') as f:
 		for line in f.read().splitlines():
@@ -30,7 +38,21 @@ def read_alignment_scores(filename):
 				pass
 	return scores
 
+def read_existing_aligns(filename):
+	"""
+	Get previously calculated alignments
+	"""
+	pairs = []
+	with open(filename, 'r') as f:
+		lines = f.read().splitlines()
+	for i in range(0, len(lines), 4):
+		pairs.append((lines[i], lines[i+1]))
+	return pairs
+
 def calc_all_scores(pairs, matrix, gap_start, gap_extend):
+	"""
+	Calculate alignment score for all pairs in pairs
+	"""
 	scores = []
 
 	#speedup - read in score matrix here if its a string
@@ -45,6 +67,9 @@ def calc_all_scores(pairs, matrix, gap_start, gap_extend):
 	return scores
 
 def calc_all_aligns(pairs, matrix, gap_start, gap_extend, filename):
+	"""
+	Calculate and save alignments and score for all pairs in pairs
+	"""
 	aligned = []
 
 	#speedup - read in score matrix here if its a string
@@ -64,7 +89,12 @@ def calc_all_aligns(pairs, matrix, gap_start, gap_extend, filename):
 			f.write('\n')
 
 def calc_fp_rate(true_scores, false_scores, cutoff):
+	"""
+	For a given tp cutoff, calculate the fp rate
+	"""
 	true_scores = sorted(true_scores)
+
+	#get cutoff value
 	cutoff = true_scores[int(len(true_scores)*(1-cutoff))]
 
 	fps = 0
@@ -76,8 +106,12 @@ def calc_fp_rate(true_scores, false_scores, cutoff):
 
 
 def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
+	"""
+	For a range of gap starts and gap extends, plot fp rate as a heatmap
+	"""
 	fp_rates = pd.DataFrame(index=range(1,21), columns=range(1,6), dtype=np.double)
 
+	#loop through gap extend and gap start values
 	for gap_start in range(1,21):
 		for gap_extend in range(1,6):
 			true_scores = []
@@ -88,10 +122,12 @@ def best_fp_rate(pos, neg, matrix = "BLOSUM50"):
 			false_scores =  calc_all_scores(neg, matrix, 
 					gap_start = gap_start, gap_extend = gap_extend)
 			
+			#calculate fp rate from those scores
 			fp_rates[gap_extend][gap_start] = calc_fp_rate(
 				[x[1] for x in true_scores], 
 				[y[1] for y in false_scores], 0.7)
 
+	#plot fp rates
 	ax = sns.heatmap(fp_rates, annot=True, annot_kws={"size": 7})
 	ax.set(xlabel='Gap extend', ylabel='Gap start')
 	fig = ax.get_figure()
@@ -105,9 +141,24 @@ def compare_matrices(pos, neg,
 	gen_roc = True,
 	filename = "all_matrices_roc.png"):
 
+	"""
+	Takes in pos pairs, neg pairs, matrices, plots ROC curve with all provided matrices
+	"""
+
 	TSs = []
 	FSs = []
-	for matrix in matrices:
+
+	if prescored is None:
+		prescored = []
+		for m in matix:
+			prescored.append(None)
+
+
+	for i, matrix in enumerate(matrices):
+		if prescored[i] is not None and prescored[0] == i:
+			TSs.append(prescored[1][0])
+			FSs.append(prescored[1][1])
+			continue
 		pos_scores = calc_all_scores(pos, matrix, 11, 1)
 		TSs.append([x[1] for x in pos_scores])
 		neg_scores = calc_all_scores(neg, matrix, 11, 1)
@@ -119,6 +170,9 @@ def compare_matrices(pos, neg,
 			print(matrix, calc_fp_rate(ts, fs, 0.7))
 
 def compare_normalized(pos, neg, matrix):
+	"""
+	Calculate ROC curve for raw and normalized scores for a given matrix and pos/neg pairs
+	"""
 	TSs = []
 	FSs = []
 	pos_scores = calc_all_scores(pos, matrix, 11, 1)
@@ -149,8 +203,10 @@ def loss_function(true_scores, false_scores):
 	fp_score = 0
 
 	for fp_rate in [0.0, 0.1, 0.2, 0.3]:
+		#Get cutoff value
 		TPs = 0.0
 		cutoff = false_scores[int(len(false_scores)*(1-fp_rate))-1]
+		#add up true positives
 		for score in true_scores:
 			if score > cutoff:
 				TPs += 1
@@ -158,11 +214,15 @@ def loss_function(true_scores, false_scores):
 	return fp_score
 
 def check_symmetry(matrix):
+	#make sure matrix is symmetrical
 	for aa1 in matrix:
 		for aa2 in matrix[aa1]:
 			assert(matrix[aa1][aa2] == matrix[aa2][aa1])
 
 def mutate_matrix(starting_matrix, sigma, mut_prob = 1):
+	"""
+	"Mutate" a few values in the matrix to introduce diversity into population
+	"""
 	new_matrix = {}
 
 	#for each value, random sample around starting value
@@ -183,10 +243,14 @@ def mutate_matrix(starting_matrix, sigma, mut_prob = 1):
 				#keep value from start matrix
 				else:
 					new_matrix[aa1][aa2] = starting_matrix[aa1][aa2]
+	#make sure its still symmetric
 	check_symmetry(new_matrix)
 	return new_matrix
 
 def create_matrix_file(matrix, filename):
+	"""
+	Write matrix to a file that can be interpreted by algs.get_scoring_matrix
+	"""
 	aas = list(matrix.keys())
 	with open(filename, 'w') as f:
 		f.write(" ".join(aas) + '\n')
@@ -211,11 +275,9 @@ def genetic_loop(pos, neg, population, calculated_scores, generation, goal):
 			scores[i] = calculated_scores[i]
 			continue
 		
-		#calculate scores
-		true_scores = [x[1] for x in 
-			calc_all_scores(pos, individual, 11, 1)]
-		false_scores = [x[1] for x in 
-			calc_all_scores(neg, individual, 11, 1)]
+		#calculate scores on each of the alignments
+		true_scores = [algs.score_existing_align(*(p), individual) for p in pos]
+		false_scores = [algs.score_existing_align(*(n), individual) for n in neg]
 
 		#evaluate current 
 		scores[i] = loss_function(true_scores, false_scores)
@@ -224,8 +286,8 @@ def genetic_loop(pos, neg, population, calculated_scores, generation, goal):
 		if scores[i] > goal:
 			return [individual], (i, scores[i])
 
-	print("Gen " + str(generation), list(scores.values()))
-	#keep top 2
+	#print("Gen " + str(generation), list(scores.values()))
+	#keep top 2 as parents
 	pop_to_keep = sorted(scores, key = lambda x: scores[x], reverse = True)[:2]
 	population = [population[i] for i in pop_to_keep] #get matrices
 	new_scores = [scores[i] for i in pop_to_keep] #get corresponding scores
@@ -238,7 +300,7 @@ def genetic_loop(pos, neg, population, calculated_scores, generation, goal):
 	aas = list(p1.keys())
 	switch_aas = np.random.choice(aas, np.random.randint(1, 23), replace = False)
 	
-	#switch those
+	#switch the values between the parents for those AAs
 	for aa1 in aas:
 		for aa2 in p1[aa1]:
 			if aa1 in switch_aas:
@@ -256,6 +318,7 @@ def genetic_loop(pos, neg, population, calculated_scores, generation, goal):
 	o1 = mutate_matrix(p1, 0.5, 0.1)
 	o2 = mutate_matrix(p2, 0.5, 0.1)
 	
+	#append the offspring to the new population, give placeholder scores
 	population += [o1, o2]
 	new_scores += [-1, -1]
 
@@ -269,8 +332,9 @@ def optimize_score_matrix(pos, neg, starting_matrix, goal = None, max_gen = 100)
 	starting_mat = algs.get_scoring_matrix(starting_matrix)
 
 	#calculate the starting score 
-	true_scores = [x[1] for x in calc_all_scores(pos, starting_mat, 11, 1)]
-	false_scores = [x[1] for x in calc_all_scores(neg, starting_mat, 11, 1)]
+	true_scores = [algs.score_existing_align(*(p), starting_mat) for p in pos]
+	false_scores = [algs.score_existing_align(*(n), starting_mat) for n in neg]
+	
 	scores = [loss_function(true_scores, false_scores)]
 
 	#if we dont have a specific goal, beat the starting matrix
@@ -287,45 +351,173 @@ def optimize_score_matrix(pos, neg, starting_matrix, goal = None, max_gen = 100)
 	
 	generation = 0
 	best_matrix = None
+	matrix_filename = None
 	while best_matrix is None:
+		#get current generation and scores
 		population, scores = genetic_loop(pos, neg, population, scores, generation, goal)
 		#check if we found the best
 		if len(population) == 1:
+			#save matrix and return
 			i, score = scores
 			print ("Optimized: {0}_{1}, score: {2}".format(generation, i, score))
 			best_matrix = population[0]
 			create_matrix_file(best_matrix, "optimized_" + starting_matrix)
+			matrix_filename = "optimized_" + starting_matrix
+		#hit max without hitting goal
 		if generation == max_gen:
+			#get the best matrix in the current population
 			best_score = -1
 			for individual, score in zip(population, scores):
 				if score > best_score:
 					best_score = score
 					best_matrix = individual
-			create_matrix_file(best_matrix, "optimized_" + starting_matrix + "_gen_" + str(generation))
-
+			create_matrix_file(best_matrix, "optimized_" + starting_matrix)
+			matrix_filename = "optimized_" + starting_matrix
 		generation += 1
 
-	return best_matrix
+	return best_matrix, matrix_filename
+
+def full_optimization_run(starting_pos, starting_neg, starting_matrix, goal = 4, max_gen = 5000):
+	
+	#optimize starting
+	pos_aligns = read_existing_aligns(starting_pos)
+	neg_aligns = read_existing_aligns(starting_neg)
+
+
+	#get best matrix and filename
+	new_matrix, matrix_filename = optimize_score_matrix(pos_aligns, neg_aligns, starting_matrix, goal = goal, max_gen = max_gen)
+	
+	#generate scores in initial alignment
+	starting_mat = algs.get_scoring_matrix(starting_matrix)
+
+	#calculate the starting score 
+	true_scores = [algs.score_existing_align(*(p), starting_mat) for p in pos_aligns]
+	false_scores = [algs.score_existing_align(*(n), starting_mat) for n in neg_aligns]
+
+	#calculate score on previous alignment
+	precal_pos = [algs.score_existing_align(*(p), new_matrix) for p in pos_aligns]
+	precal_neg = [algs.score_existing_align(*(n), new_matrix) for n in neg_aligns]
+
+
+	#read in initial pairs for realign
+	pos = read_pairs("Pospairs.txt")
+	neg = read_pairs("Negpairs.txt")
+
+	#save new aligns
+	calc_all_aligns(pos, new_matrix, 11, 1, starting_matrix + "_optimized_pos_aligns.txt")
+	calc_all_aligns(neg, new_matrix, 11, 1, starting_matrix + "_optimized_neg_aligns.txt")
+
+	#read in and score new aligns for consistency in scoring
+	pos_aligns_2 = read_existing_aligns(starting_matrix + "_optimized_pos_aligns.txt")
+	neg_aligns_2 = read_existing_aligns(starting_matrix + "_optimized_neg_aligns.txt")
+
+	precal_pos_2 = [algs.score_existing_align(*(p), new_matrix) for p in pos_aligns_2]
+	precal_neg_2 = [algs.score_existing_align(*(n), new_matrix) for n in neg_aligns_2]
+
+	prescored = [(0,(true_scores, false_scores)), (1,(precal_pos, precal_neg)), (2,())]
+
+	TSs = [true_scores, precal_pos, precal_pos_2]
+	FSs = [false_scores, precal_neg, precal_neg_2]
+
+	#plot all new scores
+	algs.roc(TSs, FSs, 
+		[starting_matrix, starting_matrix + "_optimized", starting_matrix + "_optimized_realign"], 
+		save = True, filename = starting_matrix + "_optimization.png")
+
+def get_score_diff(matrix):
+	"""
+	get score on starting alignments using initial matrix and optimized matrix
+	"""
+	pos_start = read_existing_aligns("BLOSUM50_pos_aligns.txt")
+	neg_start = read_existing_aligns('BLOSUM50_neg_aligns.txt')
+
+	#matrices
+	start_mat = algs.get_scoring_matrix(matrix)
+	op_mat = algs.get_scoring_matrix("optimized_" + matrix)
+
+	#initial scores
+	tp_b50 = [algs.score_existing_align(*(p), start_mat) for p in pos_start]
+	fp_b50 = [algs.score_existing_align(*(n), start_mat) for n in neg_start]
+
+	#optimized scores
+	tp_b50o = [algs.score_existing_align(*(p), op_mat) for p in pos_start]
+	fp_b50o = [algs.score_existing_align(*(n), op_mat) for n in neg_start]
+
+	all_b50 = tp_b50 + fp_b50
+	all_b50o = tp_b50o + fp_b50o
+
+	#calculate and print differences
+	total_diff = sum([x[0] - x[1] for x in zip(all_b50o, all_b50)]) / len(all_b50)
+	pos_diff = sum([x[0] - x[1] for x in zip(tp_b50o, tp_b50)]) / len(tp_b50)
+	neg_diff = sum([x[0] - x[1] for x in zip(fp_b50o, fp_b50)]) / len(fp_b50)
+
+	print(total_diff, pos_diff, neg_diff)
+
+def get_len_diff(initial_pairs, realigned_pairs):
+	"""
+	Get the differences in length between initial alignment and realignment
+	"""
+	#initial aligns
+	pos_start = read_existing_aligns(initial_pairs[0])
+	neg_start = read_existing_aligns(initial_pairs[1])
+
+	#realigned
+	pos_realign = read_existing_aligns(realigned_pairs[0])
+	neg_realign = read_existing_aligns(realigned_pairs[1])
+
+	#get length of everything
+	splen = [len(x[0]) for x in pos_start]
+	sflen = [len(x[0]) for x in neg_start]
+	salen = splen + sflen
+
+	rplen = [len(x[0]) for x in pos_realign]
+	rflen = [len(x[0]) for x in neg_realign]
+	ralen = rplen + rflen
+
+	#calculate differences
+	total_diff = sum([x[0] - x[1] for x in zip(salen, ralen)]) / len(salen)
+	pos_diff = sum([x[0] - x[1] for x in zip(splen, rplen)]) / len(rplen)
+	neg_diff = sum([x[0] - x[1] for x in zip(sflen, rflen)]) / len(rflen)
+
+	print(total_diff, pos_diff, neg_diff)
 
 
 if __name__ == "__main__":
 	pass
-	"""
-	pos = read_pairs("Pospairs.txt")
-	neg = read_pairs("Negpairs.txt")
+	#full_optimization_run('BLOSUM50_pos_aligns.txt', 'BLOSUM50_neg_aligns.txt', "MATIO", max_gen = 5000)
 
-	#calc_all_aligns(pos, "MATIO", 11, 1, "MATIO_pos_aligns.txt")
-	#calc_all_aligns(neg, "MATIO", 11, 1, "MATIO_neg_aligns.txt")
-
-	#compare_matrices(pos, neg, matrices = ["MATIO", "optimized_MATIO_gen_200"], filename = "MATIO_optimization.png")
-
+	#get_len_diff(('BLOSUM50_pos_aligns.txt', 'BLOSUM50_neg_aligns.txt'),
+	#("MATIO_optimized_pos_aligns.txt", "MATIO_optimized_neg_aligns.txt"))
+	#mat = algs.get_scoring_matrix("BLOSUM50")
+	#algs.score_existing_align("AAAAAA", "AAAAA", mat)
 	
-	tp_b50 = read_alignment_scores("MATIO_pos_aligns.txt")
-	fp_b50 = read_alignment_scores("MATIO_neg_aligns.txt")
+	"""
+	#optimize starting
+	#read in and score new aligns for consistency in scoring
+	pos_start = read_existing_aligns("BLOSUM50_pos_aligns.txt")
+	neg_start = read_existing_aligns('BLOSUM50_neg_aligns.txt')
+
+	cur_matrix = "MATIO"
+	tp_b50 = [algs.score_existing_align(*(p), "MATIO") for p in pos_start]
+	fp_b50 = [algs.score_existing_align(*(n), "MATIO") for n in neg_start]
+	tp_b50o = read_alignment_scores("optimized_MATIO")
+	fp_b50o = read_alignment_scores("optimized_MATO")
+
+	total_diff = sum([x[0] - x[1] for x in zip(all_b50o, all_b50)]) / len(all_b50)
+	pos_diff = sum([x[0] - x[1] for x in zip(tp_b50o, tp_b50)]) / len(tp_b50)
+	neg_diff = sum([x[0] - x[1] for x in zip(fp_b50o, fp_b50)]) / len(fp_b50)
+
+	print(total_diff, pos_diff, neg_diff)
+	
+	pos_aligns = read_existing_aligns(starting_pos)
+	neg_aligns = read_existing_aligns(starting_neg)
+
+	tp_b50 = read_alignment_scores("BLOSUM50_pos_aligns.txt")
+	fp_b50 = read_alignment_scores("BLOSUM50_neg_aligns.txt")
 	all_b50 = tp_b50 + fp_b50
 
-	tp_b50o = read_alignment_scores("MATIO_optimized_pos_aligns.txt")
-	fp_b50o = read_alignment_scores("MATIO_optimized_neg_aligns.txt")
+	tp_b50o = read_alignment_scores("BLOSUM50_optimized_pos_aligns.txt")
+	fp_b50o = read_alignment_scores("BLOSUM50_optimized_neg_aligns.txt")
 	all_b50o = tp_b50o + fp_b50o
 
 	total_diff = sum([x[0] - x[1] for x in zip(all_b50o, all_b50)]) / len(all_b50)
