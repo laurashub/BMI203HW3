@@ -189,7 +189,7 @@ def score(seq1, seq2, score_matrix = "BLOSUM50", gap_start = 11, gap_extend = 1)
 	"""
 	Align but no traceback, just get the alignment score
 	"""
-    return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
+	return sw(seq1, seq2, score_matrix, gap_start, gap_extend, align = False)
 
 def score_existing_align(seq1, seq2, matrix, gap_start = 11, gap_extend = 1):
 	"""

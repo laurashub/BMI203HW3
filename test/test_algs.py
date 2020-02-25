@@ -54,8 +54,8 @@ def test_scoring():
 	"""
 	scoring returned from alignment
 	"""
-    assert (algs.score("AAAAAAA", "AAAAAAA", "BLOSUM50") == 35)
-    assert (algs.score("AAAAAAA", "GGGGGGG", "BLOSUM50") == 0)
+	assert (algs.score("AAAAAAA", "AAAAAAA", "BLOSUM50") == 35)
+	assert (algs.score("AAAAAAA", "GGGGGGG", "BLOSUM50") == 0)
 
 def test_score_align():
 	"""
